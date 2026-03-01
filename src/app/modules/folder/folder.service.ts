@@ -1,7 +1,8 @@
-import { StatusCodes } from "http-status-codes";
-import ApiError from "../../../errors/ApiError";
-import db from "../../../shared/prisma";
-import { IFolder } from "./folder.interface";
+import { ListDateTimeFieldRefInput } from './../../../generated/prisma/internal/prismaNamespace';
+import { StatusCodes } from 'http-status-codes';
+import ApiError from '../../../errors/ApiError';
+import db from '../../../shared/prisma';
+import { IFolder } from './folder.interface';
 
 // Create a new folder
 
@@ -13,27 +14,55 @@ import { IFolder } from "./folder.interface";
 
 const createFolderToDB = async (payload: IFolder): Promise<IFolder> => {
   if (!payload.name) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, "Name is required");
+    throw new ApiError(StatusCodes.BAD_REQUEST, 'Name is required');
   }
 
+  // Restricted Nesting Level
   const parentFolder = await db.folder.findUnique({
     where: { id: payload.parent_folder_id ?? 0 },
     select: {
-      user:{
-        select:{
-            package:{
-                select:{
-                    max_nesting_folder: true
-                }
-            }
-        }
+      user: {
+        select: {
+          package: {
+            select: {
+              max_nesting_folder: true,
+              total_max_folder: true,
+            },
+          },
+        },
       },
-      nesting_level: true
-    }
+      nesting_level: true,
+    },
   });
 
-  if (parentFolder && parentFolder.user.package?.max_nesting_folder <= (parentFolder.nesting_level ?? 0) + 1) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, "Nesting level exceeds maximum allowed (9 levels)");
+  const packageInfo = parentFolder?.user?.package;
+
+  if (
+    packageInfo?.max_nesting_folder !== undefined &&
+    packageInfo.max_nesting_folder <= (parentFolder?.nesting_level ?? 0) + 1
+  ) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      `Nesting level exceeds maximum allowed (${packageInfo.max_nesting_folder} levels)`
+    );
+  }
+
+  // Restricted Folder Createion ListDateTimeFieldRefInput
+
+  const countFolder = await db.folder.count({
+    where: {
+      user_id: payload.user_id,
+    },
+  });
+
+  if (
+    packageInfo?.total_max_folder !== undefined &&
+    countFolder >= packageInfo.total_max_folder
+  ) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      `Folder count exceeds maximum allowed (${packageInfo.total_max_folder} folders)`
+    );
   }
 
   const createdFolder = await db.folder.create({
@@ -41,7 +70,9 @@ const createFolderToDB = async (payload: IFolder): Promise<IFolder> => {
       name: payload.name,
       user_id: payload.user_id,
       parent_folder_id: payload.parent_folder_id ?? null,
-      nesting_level: parentFolder?.nesting_level ? parentFolder.nesting_level + 1 : 0,
+      nesting_level: parentFolder?.nesting_level
+        ? parentFolder.nesting_level + 1
+        : 0,
       total_files: payload.total_files ?? 0,
     },
   });
@@ -56,7 +87,7 @@ const updateFolderToDB = async (
 ): Promise<IFolder> => {
   const existing = await db.folder.findUnique({ where: { id: folderId } });
   if (!existing) {
-    throw new ApiError(StatusCodes.NOT_FOUND, "Folder not found");
+    throw new ApiError(StatusCodes.NOT_FOUND, 'Folder not found');
   }
 
   const updatedFolder = await db.folder.update({
@@ -73,24 +104,26 @@ const updateFolderToDB = async (
 };
 
 // Delete folder by ID
-const deleteFolderFromDB = async (folderId: number): Promise<{ message: string }> => {
+const deleteFolderFromDB = async (
+  folderId: number
+): Promise<{ message: string }> => {
   const existing = await db.folder.findUnique({ where: { id: folderId } });
   if (!existing) {
-    throw new ApiError(StatusCodes.NOT_FOUND, "Folder not found");
+    throw new ApiError(StatusCodes.NOT_FOUND, 'Folder not found');
   }
 
   await db.folder.delete({ where: { id: folderId } });
-  return { message: "Folder deleted successfully" };
+  return { message: 'Folder deleted successfully' };
 };
 
 // Get all folders (optional: can filter by user_id)
-const getAllFoldersFromDB = async (userId?: number)=> {
+const getAllFoldersFromDB = async (userId?: number) => {
   const folders = await db.folder.findMany({
     where: userId ? { user_id: userId } : undefined,
-    orderBy: { id: "asc" },
+    orderBy: { id: 'asc' },
     include: {
       folders: true, // include child folders
-      files: true,   // include files
+      files: true, // include files
     },
   });
   return folders;
