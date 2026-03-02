@@ -11,8 +11,9 @@ export const createFileToDB = async (
   filePerFolderLimit: number
 ) => {
   console.log('payload', payload);
+  payload.folder_id = Number(payload.folder_id);
   // Convert folder_id safely
-  const folderId = payload.folder_id ? Number(payload.folder_id) : null;
+  const folderId = payload.folder_id ? payload.folder_id : null;
 
   let folder = null;
 

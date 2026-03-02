@@ -3,7 +3,6 @@ import { StatusCodes } from 'http-status-codes';
 import ApiError from '../../../errors/ApiError';
 import db from '../../../shared/prisma';
 import { IFolder } from './folder.interface';
-import { connect } from 'mongoose';
 
 // Create a new folder
 const createFolderToDB = async (payload: IFolder): Promise<IFolder> => {
@@ -103,18 +102,6 @@ const updateFolderToDB = async (
   return updatedFolder;
 };
 
-// Delete folder by ID
-const deleteFolderFromDB = async (
-  folderId: number
-): Promise<{ message: string }> => {
-  const existing = await db.folder.findUnique({ where: { id: folderId } });
-  if (!existing) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Folder not found');
-  }
-
-  await db.folder.delete({ where: { id: folderId } });
-  return { message: 'Folder deleted successfully' };
-};
 
 // Get all folders (optional: can filter by user_id)
 const getAllFoldersFromDB = async (userId?: number, parent_folder_id?: number) => {
@@ -125,9 +112,29 @@ const getAllFoldersFromDB = async (userId?: number, parent_folder_id?: number) =
   return folders;
 };
 
+const deleteFolderFromDB = async ( folderId: number,userId: number): Promise<{ message: string }> => {
+  const existing = await db.folder.findUnique({ where: { id: folderId } });
+  if (!existing) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'Folder not found');
+  }
+
+  if (existing.user_id !== userId) {
+    throw new ApiError(StatusCodes.FORBIDDEN, 'You are not authorized to delete this folder');
+  }
+
+  await db.folder.delete({ where: { id: folderId } });
+  await db.folder.deleteMany({
+    where: { parent_folder_id: folderId },
+  });
+  await db.folder.deleteMany({
+    where: { parent_folder_id: folderId },
+  });
+  return { message: 'Folder deleted successfully' };
+};
+
 export const FolderService = {
   createFolderToDB,
   updateFolderToDB,
-  deleteFolderFromDB,
   getAllFoldersFromDB,
+  deleteFolderFromDB
 };

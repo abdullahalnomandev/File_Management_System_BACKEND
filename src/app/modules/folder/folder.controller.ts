@@ -33,9 +33,23 @@ const getAll = catchAsync(async (req: Request, res: Response, next: NextFunction
   });
 });
 
+// ✅ Delete Folder
+const deleteFolder = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const folderId = Number(req.params.id);
+  const userId = req.user.id;
+  await FolderService.deleteFolderFromDB(folderId, userId);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Folder deleted successfully",
+  });
+});
+
 
 
 export const FolderController = {
   create,
- getAll
+ getAll,
+ deleteFolder
 };
