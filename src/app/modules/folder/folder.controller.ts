@@ -19,8 +19,23 @@ const create = catchAsync(async (req: Request, res: Response, next: NextFunction
   });
 });
 
+// ✅ Get All Folders
+const getAll = catchAsync(async (req: Request, res: Response, next: NextFunction) => {
+  const userId = req.user.id;
+  const parent_folder_id = Number(req.query.parent_folder_id);
+  const result = await FolderService.getAllFoldersFromDB(userId, parent_folder_id);
+
+  sendResponse(res, {
+    success: true,
+    statusCode: StatusCodes.OK,
+    message: "Folders retrieved successfully",
+    data: result,
+  });
+});
+
+
 
 export const FolderController = {
   create,
-
+ getAll
 };

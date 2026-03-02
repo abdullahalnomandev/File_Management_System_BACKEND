@@ -9,8 +9,8 @@ export interface IFolder {
   total_files: number;
 
   // relational fields
-  parent?: IFolder | null;  // optional parent folder
-  folders?: IFolder[];      // child folders
-  files?: IFile[];           // files inside this folder
+  parent?: IFolder | null;  
+  folders?: IFolder[];   
+  files?: IFile[];         
 }
 

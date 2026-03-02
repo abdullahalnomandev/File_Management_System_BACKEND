@@ -3,77 +3,77 @@ import { StatusCodes } from 'http-status-codes';
 import ApiError from '../../../errors/ApiError';
 import db from '../../../shared/prisma';
 import { IFolder } from './folder.interface';
+import { connect } from 'mongoose';
 
 // Create a new folder
-
-//   "name": "Projects",
-//   "user_id": 1,
-//   "parent_folder_id": null,
-//   "nesting_level": 0,
-//   "total_files": 3
-
 const createFolderToDB = async (payload: IFolder): Promise<IFolder> => {
-  if (!payload.name) {
+  const { name, user_id, parent_folder_id } = payload;
+
+  if (!name) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Name is required');
   }
 
-  // Restricted Nesting Level
-  const parentFolder = await db.folder.findUnique({
-    where: { id: payload.parent_folder_id ?? 0 },
-    select: {
-      user: {
+  const parentFolder = parent_folder_id
+    ? await db.folder.findUnique({
+        where: { id: parent_folder_id },
         select: {
-          package: {
+          nesting_level: true,
+          user: {
             select: {
-              max_nesting_folder: true,
-              total_max_folder: true,
+              package: {
+                select: {
+                  max_nesting_folder: true,
+                  total_max_folder: true,
+                },
+              },
             },
           },
         },
-      },
-      nesting_level: true,
-    },
-  });
+      })
+    : null;
+
+  const nesting_level = await db.folder.count({
+    where:{
+      parent_folder_id
+    }
+  })
 
   const packageInfo = parentFolder?.user?.package;
 
+  // Check nesting level restriction
+  const nextNestingLevel = parentFolder ? nesting_level + 1 : 0;
   if (
     packageInfo?.max_nesting_folder !== undefined &&
-    packageInfo.max_nesting_folder <= (parentFolder?.nesting_level ?? 0) + 1
+    nextNestingLevel >= packageInfo.max_nesting_folder
   ) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
-      `Nesting level exceeds maximum allowed (${packageInfo.max_nesting_folder} levels)`
+      `Maximum ${packageInfo.max_nesting_folder} nesting levels allowed.`
     );
   }
 
-  // Restricted Folder Createion ListDateTimeFieldRefInput
-
-  const countFolder = await db.folder.count({
-    where: {
-      user_id: payload.user_id,
-    },
+  // Check total folder limit
+  const folderCount = await db.folder.count({
+    where: { user_id },
   });
 
   if (
     packageInfo?.total_max_folder !== undefined &&
-    countFolder >= packageInfo.total_max_folder
+    folderCount >= packageInfo.total_max_folder
   ) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
-      `Folder count exceeds maximum allowed (${packageInfo.total_max_folder} folders)`
+      `Oops! You can only create ${packageInfo.total_max_folder} folders.`
     );
   }
 
+  // Create folder
   const createdFolder = await db.folder.create({
     data: {
-      name: payload.name,
-      user_id: payload.user_id,
-      parent_folder_id: payload.parent_folder_id ?? null,
-      nesting_level: parentFolder?.nesting_level
-        ? parentFolder.nesting_level + 1
-        : 0,
-      total_files: payload.total_files ?? 0,
+      name,
+      user_id,
+      parent_folder_id: parent_folder_id ?? null,
+      nesting_level: nextNestingLevel,
     },
   });
 
@@ -117,14 +117,10 @@ const deleteFolderFromDB = async (
 };
 
 // Get all folders (optional: can filter by user_id)
-const getAllFoldersFromDB = async (userId?: number) => {
+const getAllFoldersFromDB = async (userId?: number, parent_folder_id?: number) => {
   const folders = await db.folder.findMany({
-    where: userId ? { user_id: userId } : undefined,
+    where: userId ? { user_id: userId, parent_folder_id: parent_folder_id ?? undefined } : undefined,
     orderBy: { id: 'asc' },
-    include: {
-      folders: true, // include child folders
-      files: true, // include files
-    },
   });
   return folders;
 };
