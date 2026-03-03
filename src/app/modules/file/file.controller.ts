@@ -18,7 +18,7 @@ const createDir = (dirPath: string) => {
 
 export const uploadHandler = catchAsync(async (req: any, res, next) => {
   const packageInfo = req.packageInfo as IPackage;
-  const baseUploadDir = path.join(process.cwd(), 'uploads', 'files');
+  const baseUploadDir = path.join(process.cwd(), 'uploads', 'file');
   createDir(baseUploadDir);
 
   const storage = multer.diskStorage({
